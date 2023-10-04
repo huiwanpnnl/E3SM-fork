@@ -401,6 +401,8 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
 
   real(r8) :: tmp(pcols,pver)
 
+  real(r8) :: tmp1d(pcols)
+
   character(len=*),parameter :: subname = 'conditional_diag_main:get_values'
 
   integer :: ncol, idx, m
@@ -581,11 +583,19 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
         case ('CAPE')
           call compute_cape( state, pbuf, pcols, pver, arrayout(:,1) ) ! in, in, in, out
 
-        case ('NCIC')
-          call ncic_diag( state, pbuf, pcols, pver, arrayout )
+        case ('NCIC','CDNC')
+          call cdnc_diag( state, pbuf, pcols, pver, arrayout )
+
+        case ('CDNC_DN')
+          call cdnc_diag   ( state, pbuf, pcols, pver, tmp   )
+          call day_or_night( state, pbuf, pcols, pver, tmp1d )
+          call var3d_day_night( ncol, pcols, pver, tmp1d, tmp, arrayout )
 
         case ('QCIC')
           call qcic_diag( state, pbuf, pcols, pver, arrayout )
+
+        case ('DAYNIGHT')
+          call day_or_night( state, pbuf, pcols, pver, arrayout(:,1) )
 
         !-----------------------------------------------------------------------------------
         ! The following were added mostly for testing of the conditional diag functionality

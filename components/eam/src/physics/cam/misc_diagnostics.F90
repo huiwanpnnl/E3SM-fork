@@ -12,9 +12,11 @@ public :: supersat_q_ice
 public :: relhum_water_percent
 public :: relhum_ice_percent
 public :: compute_cape
-public :: ncic_diag
+public :: cdnc_diag
+public :: var3d_day_night
 public :: qcic_diag
 public :: tmp_numliq_update_after_activation
+public :: day_or_night
 
 contains
 
@@ -265,7 +267,7 @@ subroutine compute_cape( state, pbuf, pcols, pver, cape )
  end subroutine compute_cape
 !---------------------------
 
-subroutine ncic_diag( state, pbuf, pcols, pver, ncic )
+subroutine cdnc_diag( state, pbuf, pcols, pver, cdnc )
 !----------------------------------------------------------------------
 ! Purpose: diagnose in-cloud droplet number concentration (unit: 1/cc)
 ! History: first version by Hui Wan, 2022-06
@@ -281,7 +283,7 @@ subroutine ncic_diag( state, pbuf, pcols, pver, ncic )
   type(physics_buffer_desc),pointer    :: pbuf(:)
   integer,                  intent(in) :: pcols
   integer,                  intent(in) :: pver
-  real(r8),                intent(out) :: ncic(pcols,pver)
+  real(r8),                intent(out) :: cdnc(pcols,pver)
 
   integer :: ncol, ixnumliq
 
@@ -312,9 +314,9 @@ subroutine ncic_diag( state, pbuf, pcols, pver, ncic )
   ! Now, calculate the in-cloud droplet number concentration
 
   call cnst_get_ind( 'NUMLIQ', ixnumliq )
-  ncic(:ncol,:) = state%q(:ncol,:,ixnumliq) * rho(:ncol,:) / lcldm(:ncol,:)
+  cdnc(:ncol,:) = state%q(:ncol,:,ixnumliq) * rho(:ncol,:) / lcldm(:ncol,:)
 
-end subroutine ncic_diag
+end subroutine cdnc_diag
 
 subroutine qcic_diag( state, pbuf, pcols, pver, qcic )
 !----------------------------------------------------------------------
@@ -409,5 +411,65 @@ subroutine tmp_numliq_update_after_activation( state_in, pbuf, dt, state_out )
   call physics_update( state_out, ptend, dt )
 
 end subroutine tmp_numliq_update_after_activation
+
+subroutine day_or_night( state, pbuf, pcols, pver, flag_out )
+!----------------------------------------------------------------------
+! History: first version by Hui Wan, 2023-10
+!----------------------------------------------------------------------
+
+  use physics_types,  only: physics_state
+  use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
+
+  type(physics_state),intent(in),target:: state
+  type(physics_buffer_desc),pointer    :: pbuf(:)
+  integer,                  intent(in) :: pver
+  integer,                  intent(in) :: pcols
+  real(r8),                intent(out) :: flag_out(pcols)
+
+  real(r8),parameter :: DAY   =  1._r8
+  real(r8),parameter :: NIGHT = -1._r8
+  real(r8),parameter :: eps   = 1e-36_r8
+
+  real(r8),pointer :: zqrs(:,:)
+  integer  :: ncol
+  real(r8) :: zsum(pcols)
+
+  !-----------------------------
+  ! Set default output to night
+
+  flag_out(:) = NIGHT
+
+  ! If there is non-zero SW radiation in a column, then mark the current time as daytime for that column.
+
+  call pbuf_get_field(pbuf, pbuf_get_index('QRS'), zqrs)      ! get SW heating/cooling rate from pbuf
+
+  ncol  = state%ncol
+  zsum(1:ncol)  = sum( abs(zqrs(1:ncol,:)), 2 )               ! vertical sum of abs(QRS)
+  where( zsum(1:ncol).ge.eps ) flag_out(1:ncol) = DAY     ! mark daytime columns
+
+  !---------
+
+end subroutine day_or_night
+
+subroutine var3d_day_night( ncol, pcols, nver, day_night_flag, var3d_in, var3d_out)
+!----------------------------------------------------------------------
+! History: first version by Hui Wan, 2023-10
+!----------------------------------------------------------------------
+  integer,  intent(in) :: ncol
+  integer,  intent(in) :: pcols
+  integer,  intent(in) :: nver
+  real(r8), intent(in) :: day_night_flag(pcols)
+  real(r8), intent(in) :: var3d_in (pcols,nver)
+  real(r8), intent(out):: var3d_out(pcols,nver)
+
+  integer :: kk
+
+  !-----------------------
+  do kk = 1,nver
+     var3d_out(1:ncol,kk) = var3d_in(1:ncol,kk) * day_night_flag(1:ncol)
+  end do
+
+end subroutine var3d_day_night
+
 
 end module misc_diagnostics
