@@ -591,6 +591,9 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
           call day_or_night( state, pbuf, pcols, pver, tmp1d )
           call var3d_day_night( ncol, pcols, pver, tmp1d, tmp, arrayout )
 
+        case ('CDNC_OC')
+          call cdnc_when_overcast( state, pbuf, pcols, pver, arrayout )
+
         case ('QCIC')
           call qcic_diag( state, pbuf, pcols, pver, arrayout )
 

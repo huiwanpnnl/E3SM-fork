@@ -13,6 +13,7 @@ public :: relhum_water_percent
 public :: relhum_ice_percent
 public :: compute_cape
 public :: cdnc_diag
+public :: cdnc_when_overcast
 public :: var3d_day_night
 public :: qcic_diag
 public :: tmp_numliq_update_after_activation
@@ -317,6 +318,36 @@ subroutine cdnc_diag( state, pbuf, pcols, pver, cdnc )
   cdnc(:ncol,:) = state%q(:ncol,:,ixnumliq) * rho(:ncol,:) / lcldm(:ncol,:)
 
 end subroutine cdnc_diag
+
+subroutine cdnc_when_overcast( state, pbuf, pcols, pver, cdnc_oc )
+!----------------------------------------------------------------------
+! Purpose: cdnc under overcast condition.
+! History: first version by Hui Wan, 2023-10
+!----------------------------------------------------------------------
+  use physics_types,  only: physics_state
+  use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
+
+  type(physics_state),intent(in),target:: state
+  type(physics_buffer_desc),pointer    :: pbuf(:)
+  integer,                  intent(in) :: pcols
+  integer,                  intent(in) :: pver
+  real(r8),                intent(out) :: cdnc_oc(pcols,pver)
+
+  real(r8), parameter :: fmin = 0.9_r8
+  real(r8), pointer :: liqcldf(:,:)  ! liquid cloud fraction
+  integer :: ncol
+
+  !--------
+  ncol = state%ncol
+
+  call cdnc_diag( state, pbuf, pcols, pver, cdnc_oc )
+
+  call pbuf_get_field(pbuf, pbuf_get_index('AST'), liqcldf)
+
+  where( liqcldf(1:ncol,:).lt.fmin ) cdnc_oc(1:ncol,:) = -1._r8 * cdnc_oc(1:ncol,:)
+  !--------
+
+end subroutine cdnc_when_overcast
 
 subroutine qcic_diag( state, pbuf, pcols, pver, qcic )
 !----------------------------------------------------------------------
