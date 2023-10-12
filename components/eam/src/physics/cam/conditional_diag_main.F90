@@ -594,6 +594,9 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
         case ('CDNC_OC')
           call cdnc_when_overcast( state, pbuf, pcols, pver, arrayout )
 
+        case ('COLFLAG')
+          call column_has_small_cdnc_when_overcast( state, pbuf, pcols, pver, arrayout(:,1) )
+
         case ('QCIC')
           call qcic_diag( state, pbuf, pcols, pver, arrayout )
 

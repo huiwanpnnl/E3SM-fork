@@ -14,6 +14,7 @@ public :: relhum_ice_percent
 public :: compute_cape
 public :: cdnc_diag
 public :: cdnc_when_overcast
+public :: column_has_small_cdnc_when_overcast
 public :: var3d_day_night
 public :: qcic_diag
 public :: tmp_numliq_update_after_activation
@@ -348,6 +349,50 @@ subroutine cdnc_when_overcast( state, pbuf, pcols, pver, cdnc_oc )
   !--------
 
 end subroutine cdnc_when_overcast
+
+subroutine column_has_small_cdnc_when_overcast( state, pbuf, pcols, pver, flag_out )
+!----------------------------------------------------------------------
+! Purpose: cdnc under overcast condition.
+! History: first version by Hui Wan, 2023-10
+!----------------------------------------------------------------------
+  use physics_types,  only: physics_state
+  use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
+
+  type(physics_state),intent(in),target:: state
+  type(physics_buffer_desc),pointer    :: pbuf(:)
+  integer,                  intent(in) :: pcols
+  integer,                  intent(in) :: pver
+  real(r8),                intent(out) :: flag_out(pcols)
+
+  real(r8)          :: cdnc(pcols,pver)
+  real(r8), pointer :: cldf(:,:)  ! liquid cloud fraction
+
+  integer(r8) :: flag_by_lev(pcols,pver)
+  integer     :: ncol
+
+  integer, parameter :: kmin   = 49      ! approximately 600 hPa in L72
+  real(r8),parameter :: fmin   = 0.9_r8
+  integer, parameter :: cntmin = 2
+
+  !-----------------------
+  flag_by_lev(:,:) = 0
+
+  call cdnc_diag( state, pbuf, pcols, pver, cdnc )
+  call pbuf_get_field(pbuf, pbuf_get_index('AST'), cldf)
+
+  ncol = state%ncol
+  where( abs( cdnc(1:ncol,kmin:) - 5e6 ).lt.4.99e6  & 
+        .and. cldf(1:ncol,kmin:).ge.fmin          ) &
+  flag_by_lev(1:ncol,kmin:) = 1
+
+  ! count the number of grid levels in each column that satisfy the condition.
+  ! If the count is no smaller thatn cntmin, then flag the column.
+
+  flag_out(:) = -1._r8 
+  where( sum( flag_by_lev(1:ncol,:), 2 ).ge.cntmin ) flag_out(1:ncol) = 1._r8
+
+  !-----------------------
+end subroutine column_has_small_cdnc_when_overcast
 
 subroutine qcic_diag( state, pbuf, pcols, pver, qcic )
 !----------------------------------------------------------------------
