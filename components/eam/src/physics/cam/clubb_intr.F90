@@ -171,6 +171,7 @@ module clubb_intr
     aist_idx, &         ! Ice stratiform cloud fraction
     qlst_idx, &         ! Physical in-cloud LWC
     qist_idx, &         ! Physical in-cloud IWC
+    skw_zt_idx, &       ! skewness on thermo levels, without the ghost level in CLUBB
     dp_frac_idx, &      ! deep convection cloud fraction
     sh_frac_idx, &      ! shallow convection cloud fraction
     rel_idx, &          ! Rel
@@ -305,6 +306,7 @@ module clubb_intr
     call pbuf_add_field('ALST',       'global', dtype_r8, (/pcols,pver,dyn_time_lvls/),    alst_idx)
     call pbuf_add_field('QIST',       'global', dtype_r8, (/pcols,pver,dyn_time_lvls/),    qist_idx)
     call pbuf_add_field('QLST',       'global', dtype_r8, (/pcols,pver,dyn_time_lvls/),    qlst_idx)
+    call pbuf_add_field('SKWZT',      'global', dtype_r8, (/pcols,pver/),                  skw_zt_idx)
     call pbuf_add_field('CONCLD',     'global', dtype_r8, (/pcols,pver,dyn_time_lvls/),    concld_idx)
     call pbuf_add_field('CLD',        'global', dtype_r8, (/pcols,pver,dyn_time_lvls/),    cld_idx)
     call pbuf_add_field('FICE',       'physpkg',dtype_r8, (/pcols,pver/),               fice_idx)
@@ -743,6 +745,7 @@ end subroutine clubb_init_cnst
     aist_idx    = pbuf_get_index('AIST')        ! Ice stratiform cloud fraction
     qlst_idx    = pbuf_get_index('QLST')        ! Physical in-stratus LWC
     qist_idx    = pbuf_get_index('QIST')        ! Physical in-stratus IWC
+    skw_zt_idx  = pbuf_get_index('SKWZT')       ! Skewness on thermo levels 
     dp_frac_idx = pbuf_get_index('DP_FRAC')     ! Deep convection cloud fraction
     icwmrdp_idx = pbuf_get_index('ICWMRDP')     ! In-cloud deep convective mixing ratio
     sh_frac_idx = pbuf_get_index('SH_FRAC')     ! Shallow convection cloud fraction
@@ -1230,6 +1233,7 @@ end subroutine clubb_init_cnst
    real(core_rknd) :: rcm_in_layer_out(pverp)          ! CLUBB output of in-cloud liq. wat. mix. ratio [kg/kg]
    real(core_rknd) :: cloud_cover_out(pverp)           ! CLUBB output of in-cloud cloud fraction       [fraction]
    real(core_rknd) :: thlprcp_out(pverp)
+   real(core_rknd) :: skw_zt_out(pverp)                ! skewness on thermo levels, in CLUBB's coordinate, with a ghost level
    real(core_rknd) :: rho_ds_zm(pverp)                 ! Dry, static density on momentum levels        [kg/m^3]
    real(core_rknd) :: rho_ds_zt(pverp)                 ! Dry, static density on thermodynamic levels   [kg/m^3]
    real(core_rknd) :: invrs_rho_ds_zm(pverp)           ! Inv. dry, static density on momentum levels   [m^3/kg]
@@ -1433,6 +1437,7 @@ end subroutine clubb_init_cnst
    real(r8), pointer, dimension(:,:) :: aist     ! ice stratiform cloud fraction                [fraction]
    real(r8), pointer, dimension(:,:) :: qlst     ! Physical in-stratus LWC                      [kg/kg]
    real(r8), pointer, dimension(:,:) :: qist     ! Physical in-stratus IWC                      [kg/kg]
+   real(r8), pointer, dimension(:,:) :: skw_zt   ! skewness of w on thermo levels               [-]
    real(r8), pointer, dimension(:,:) :: deepcu   ! deep convection cloud fraction               [fraction]
    real(r8), pointer, dimension(:,:) :: shalcu   ! shallow convection cloud fraction            [fraction]
    real(r8), pointer, dimension(:,:) :: khzt     ! eddy diffusivity on thermo levels            [m^2/s]
@@ -1660,6 +1665,7 @@ end subroutine clubb_init_cnst
    call pbuf_get_field(pbuf, aist_idx,    aist,    start=(/1,1,itim_old/), kount=(/pcols,pver,1/))
    call pbuf_get_field(pbuf, qlst_idx,    qlst,    start=(/1,1,itim_old/), kount=(/pcols,pver,1/))
    call pbuf_get_field(pbuf, qist_idx,    qist,    start=(/1,1,itim_old/), kount=(/pcols,pver,1/))
+   call pbuf_get_field(pbuf, skw_zt_idx,  skw_zt)
 
    call pbuf_get_field(pbuf, prer_evap_idx, prer_evap)
    call pbuf_get_field(pbuf, accre_enhan_idx, accre_enhan)
@@ -2293,7 +2299,7 @@ end subroutine clubb_init_cnst
               wpthvp_inout, wp2thvp_inout, rtpthvp_inout, thlpthvp_inout, & ! intent(inout)
               sclrpthvp_inout, &                                            ! intent(inout)
               pdf_params, pdf_params_zm, &                                 ! intent(inout)
-              khzm_out, khzt_out, qclvar_out, thlprcp_out, &               ! intent(out)
+              khzm_out, khzt_out, qclvar_out, thlprcp_out, skw_zt_out, &   ! intent(out)
               wprcp_out, ice_supersat_frac, &                              ! intent(out)
               rcm_in_layer_out, cloud_cover_out, &                         ! intent(out)
               upwp_sfc_pert, vpwp_sfc_pert, &                              ! intent(in)
@@ -2445,6 +2451,12 @@ end subroutine clubb_init_cnst
           enddo
 
       enddo
+
+      ! flip, but do not include the ghost level
+      do k=1,pver
+          skw_zt(i,k)       = real(skw_zt_out(pverp-k+1), kind = r8)
+      enddo
+
 
       !  Fill up arrays needed for McICA.  Note we do not want the ghost point,
       !   thus why the second loop is needed.
