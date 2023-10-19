@@ -14,6 +14,8 @@ public :: relhum_ice_percent
 public :: compute_cape
 public :: cdnc_diag
 public :: cdnc_when_overcast
+public :: cdnc_masked_by_cldfrc
+public :: cdnc_when_qc_is_nonzero
 public :: column_has_small_cdnc_when_overcast
 public :: var3d_day_night
 public :: qcic_diag
@@ -343,12 +345,75 @@ subroutine cdnc_when_overcast( state, pbuf, pcols, pver, cdnc_oc )
 
   call cdnc_diag( state, pbuf, pcols, pver, cdnc_oc )
 
-  call pbuf_get_field(pbuf, pbuf_get_index('AST'), liqcldf)
+  call pbuf_get_field(pbuf, pbuf_get_index('ALST'), liqcldf)
 
   where( liqcldf(1:ncol,:).lt.fmin ) cdnc_oc(1:ncol,:) = -1._r8 * cdnc_oc(1:ncol,:)
   !--------
 
 end subroutine cdnc_when_overcast
+
+subroutine cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, cldfrc_varname, cdnc )
+!----------------------------------------------------------------------
+! Purpose: cdnc under overcast condition.
+! History: first version by Hui Wan, 2023-10
+!----------------------------------------------------------------------
+  use physics_types,  only: physics_state
+  use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
+  use micro_mg_utils, only: mincld
+
+  type(physics_state),intent(in),target:: state
+  type(physics_buffer_desc),pointer    :: pbuf(:)
+  integer,                  intent(in) :: pcols
+  integer,                  intent(in) :: pver
+  character(len=*),         intent(in) :: cldfrc_varname
+  real(r8),                intent(out) :: cdnc(pcols,pver)
+
+  real(r8), pointer :: cldfrc(:,:)  ! cloud fraction
+  integer :: ncol
+
+  !--------
+  ncol = state%ncol
+
+  call cdnc_diag( state, pbuf, pcols, pver, cdnc )
+
+  call pbuf_get_field(pbuf, pbuf_get_index(trim(cldfrc_varname)), cldfrc)
+
+  where( cldfrc(1:ncol,:).lt.mincld ) cdnc(1:ncol,:) = -1._r8 * cdnc(1:ncol,:)
+  !--------
+
+end subroutine cdnc_masked_by_cldfrc
+
+subroutine cdnc_when_qc_is_nonzero( state, pbuf, pcols, pver, cdnc )
+!----------------------------------------------------------------------
+! Purpose: cdnc under overcast condition.
+! History: first version by Hui Wan, 2023-10
+!----------------------------------------------------------------------
+  use physics_types,  only: physics_state
+  use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
+  use constituents,   only: cnst_get_ind
+  use micro_mg_utils, only: qsmall 
+
+  type(physics_state),intent(in),target:: state
+  type(physics_buffer_desc),pointer    :: pbuf(:)
+  integer,                  intent(in) :: pcols
+  integer,                  intent(in) :: pver
+  real(r8),                intent(out) :: cdnc(pcols,pver)
+
+  real(r8) :: qc(pcols,pver)  ! cloud liquid mixing ratio (grid-box mean)
+  integer :: ncol, ixcldliq
+
+  !--------
+  ncol = state%ncol
+
+  call cdnc_diag( state, pbuf, pcols, pver, cdnc )
+
+  call cnst_get_ind( 'CLDLIQ', ixcldliq )
+  qc(:ncol,:) = state%q(:ncol,:,ixcldliq)
+
+  where( qc(:ncol,:).lt.qsmall ) cdnc(:ncol,:) = -1._r8 * cdnc(:ncol,:)
+  !--------
+
+end subroutine cdnc_when_qc_is_nonzero
 
 subroutine column_has_small_cdnc_when_overcast( state, pbuf, pcols, pver, flag_out )
 !----------------------------------------------------------------------
