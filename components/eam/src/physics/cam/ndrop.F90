@@ -347,6 +347,7 @@ subroutine dropmixnuc( &
 
    real(r8), parameter :: zkmin = 0.01_r8, zkmax = 100._r8
    real(r8), parameter :: wmixmin = 0.1_r8        ! minimum turbulence vertical velocity (m/s)
+
    real(r8) :: sq2pi
 
    integer  :: i, k, l, m, mm, n
@@ -396,6 +397,7 @@ subroutine dropmixnuc( &
    real(r8) :: srcnact(pcols,pver)            ! droplet number source (#/kg/s)
    real(r8) :: srcnclr(pcols,pver)            ! droplet number source (#/kg/s)
    real(r8) :: srcevap(pcols,pver)            ! droplet number source (#/kg/s)
+   real(r8) :: smaxout(pcols,pver)
 
    real(r8) :: nsource(pcols,pver)            ! droplet number source (#/kg/s)
    real(r8) :: ndropmix(pcols,pver)           ! droplet number mixing (#/kg/s)
@@ -428,6 +430,15 @@ subroutine dropmixnuc( &
    !     note:  activation fraction fluxes are defined as 
    !     fluxn = [flux of activated aero. number into cloud (#/cm2/s)]
    !           / [aero. number conc. in updraft, just below cloudbase (#/cm3)]
+
+   ! dummy variables whose values are not used ----
+   real(r8), allocatable :: zfn(:)              ! activation fraction for aerosol number
+   real(r8), allocatable :: zfm(:)              ! activation fraction for aerosol mass
+
+   real(r8), allocatable :: zfluxn(:)           ! number  activation fraction flux (cm/s)
+   real(r8), allocatable :: zfluxm(:)           ! mass    activation fraction flux (cm/s)
+   real(r8)              :: zflux_fullact(pver) ! 100%    activation fraction flux (cm/s)
+   !---------------------------------------------------------------------
 
 
    real(r8), allocatable :: coltend(:,:)       ! column tendency for diagnostic output
@@ -495,6 +506,12 @@ subroutine dropmixnuc( &
       naermod(ntot_amode),            &
       hygro(ntot_amode),              &
       vaerosol(ntot_amode),           &
+      !
+      zfn(ntot_amode),                &
+      zfm(ntot_amode),                &
+      zfluxn(ntot_amode),             &
+      zfluxm(ntot_amode),             &
+      !
       fn(ntot_amode),                 &
       fm(ntot_amode),                 &
       fluxn(ntot_amode),              &
@@ -536,6 +553,8 @@ subroutine dropmixnuc( &
    srcnclr(:,:) = 0._r8
 
    srcevap(:,:) = 0._r8
+
+   smaxout(:,:) = 0._r8
    !=================================================
    ! overall_main_i_loop
    !=================================================
@@ -603,8 +622,40 @@ subroutine dropmixnuc( &
          end do
       end do
 
-      ! droplet nucleation/aerosol activation
+      !-----------------------------------------------------------------------------------------------
+      ! Calculate smaxout for all columns and all layers from top_lev to pver FOR DIAGNOSTIC PURPOSES
+      !-----------------------------------------------------------------------------------------------
+      do k = top_lev, pver
 
+            wbar  = wtke_cen(i,k)
+            wmix  = 0._r8
+            wmin  = 0._r8
+            wmax  = 10._r8
+            wdiab = 0
+
+            ! load aerosol properties, assuming external mixtures
+
+            phase = 1 ! interstitial
+            do m = 1, ntot_amode
+               call loadaer( &
+                  state, pbuf, i, i, k, &
+                  m, cs, phase, na, va, &
+                  hy)
+               naermod(m)  = na(i)
+               vaerosol(m) = va(i)
+               hygro(m)    = hy(i)
+            end do
+
+            call activate_modal( &
+               wbar, wmix, wdiab, wmin, wmax,           &
+               temp(i,k), cs(i,k), naermod, ntot_amode, &
+               vaerosol, hygro, zfn, zfm, zfluxn,       &
+               zfluxm,zflux_fullact(k),smaxout(i,k)     )
+      end do
+
+      !=======================================================================
+      ! droplet nucleation/aerosol activation
+      !=======================================================================
       ! tau_cld_regenerate = time scale for regeneration of cloudy air 
       !    by (horizontal) exchange with clear air
       tau_cld_regenerate = 3600.0_r8 * 3.0_r8 
@@ -1127,6 +1178,7 @@ subroutine dropmixnuc( &
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCNACT'), ptr2d ); ptr2d = srcnact
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCNCLR'), ptr2d ); ptr2d = srcnclr
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCEVAP'), ptr2d ); ptr2d = srcevap
+   call pbuf_get_field( pbuf, pbuf_get_index('NDROPSMX'), ptr2d ); ptr2d = smaxout
 
    call outfld('NDROPCOL', ndropcol, pcols, lchnk)
    call outfld('NDROPSRC', nsource,  pcols, lchnk)
@@ -1283,7 +1335,7 @@ end subroutine explmix
 
 subroutine activate_modal(wbar, sigw, wdiab, wminf, wmaxf, tair, rhoair,  &
    na, nmode, volume, hygro, &
-   fn, fm, fluxn, fluxm, flux_fullact, smax_prescribed ) 
+   fn, fm, fluxn, fluxm, flux_fullact, smax_prescribed, smax_out )
 
    !      calculates number, surface, and mass fraction of aerosols activated as CCN
    !      calculates flux of cloud droplets, surface area, and aerosol mass into cloud
@@ -1324,6 +1376,7 @@ subroutine activate_modal(wbar, sigw, wdiab, wminf, wmaxf, tair, rhoair,  &
   
    !      optional
    real(r8), optional :: smax_prescribed  ! prescribed max. supersaturation for secondary activation 
+   real(r8), optional :: smax_out         ! smax output to calling subroutine (for diagnostic purposes)
 
    !      local
 
@@ -1671,6 +1724,12 @@ subroutine activate_modal(wbar, sigw, wdiab, wminf, wmaxf, tair, rhoair,  &
       endif
 
    endif
+
+   ! optional output to calling subroutine
+
+   if ( present( smax_out ) ) then
+      smax_out = smax
+   end if
 
 end subroutine activate_modal
 

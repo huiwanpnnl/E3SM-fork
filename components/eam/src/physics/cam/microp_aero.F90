@@ -143,17 +143,18 @@ subroutine microp_aero_register
 
    integer :: idx
 
-   call pbuf_add_field('NPCCN',      'physpkg',dtype_r8,(/pcols,pver/), npccn_idx)
-   call pbuf_add_field('NDROPSRC',   'physpkg',dtype_r8,(/pcols,pver/), idx)
-   call pbuf_add_field('NDROPMIX',   'physpkg',dtype_r8,(/pcols,pver/), idx)
-   call pbuf_add_field('NDROPW',     'physpkg',dtype_r8,(/pcols,pver/), idx)
-   call pbuf_add_field('NDROPWSB',   'physpkg',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NPCCN',      'global',dtype_r8,(/pcols,pver/), npccn_idx)
+   call pbuf_add_field('NDROPSRC',   'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NDROPMIX',   'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NDROPW',     'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NDROPWSB',   'global',dtype_r8,(/pcols,pver/), idx)
 
-   call pbuf_add_field('NSRCGROW',   'physpkg',dtype_r8,(/pcols,pver/), idx)
-   call pbuf_add_field('NSRCSHRK',   'physpkg',dtype_r8,(/pcols,pver/), idx)
-   call pbuf_add_field('NSRCNACT',   'physpkg',dtype_r8,(/pcols,pver/), idx)
-   call pbuf_add_field('NSRCNCLR',   'physpkg',dtype_r8,(/pcols,pver/), idx)
-   call pbuf_add_field('NSRCEVAP',   'physpkg',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NSRCGROW',   'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NSRCSHRK',   'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NSRCNACT',   'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NSRCNCLR',   'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NSRCEVAP',   'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NDROPSMX',   'global',dtype_r8,(/pcols,pver/), idx)
 
    call pbuf_add_field('RNDST',      'physpkg',dtype_r8,(/pcols,pver,4/), rndst_idx)
    call pbuf_add_field('NACON',      'physpkg',dtype_r8,(/pcols,pver,4/), nacon_idx)
