@@ -540,7 +540,7 @@ contains
     khzm, khzt, &                                           ! intent(out)
 #endif
 #ifdef CLUBB_CAM
-    qclvar, thlprcp_out, &                                  ! intent(out)
+    qclvar, thlprcp_out, skw_zt_out, &                      ! intent(out)
 #endif
     wprcp, ice_supersat_frac, &                             ! intent(out)
     rcm_in_layer, cloud_cover, &                            ! intent(out)
@@ -706,6 +706,7 @@ contains
 #ifdef CLUBB_CAM
     real( kind = core_rknd), intent(out), dimension(gr%nz) :: &
       qclvar, &     ! cloud water variance
+      skw_zt_out, & 
       thlprcp_out
 #endif
 
@@ -764,7 +765,7 @@ contains
                khzm, khzt, &                                  ! intent(out)
 #endif
 #ifdef CLUBB_CAM
-               qclvar, thlprcp_out, &                         ! intent(out)
+               qclvar, thlprcp_out, skw_zt_out, &             ! intent(out)
 #endif
       wprcp, ice_supersat_frac, &                             ! intent(out)
       rcm_in_layer, cloud_cover, &                            ! intent(out)

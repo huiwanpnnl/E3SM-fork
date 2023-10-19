@@ -159,7 +159,7 @@ module advance_clubb_core_module
                khzm, khzt, &                                        ! intent(out)
 #endif
 #ifdef CLUBB_CAM
-               qclvar, thlprcp_out, &                               ! intent(out)
+               qclvar, thlprcp_out, skw_zt_out, &                   ! intent(out)
 #endif
                wprcp, ice_supersat_frac, &                          ! intent(out)
                rcm_in_layer, cloud_cover, &                         ! intent(out)
@@ -623,6 +623,7 @@ module advance_clubb_core_module
 #ifdef CLUBB_CAM
     real( kind = core_rknd), intent(out), dimension(gr%nz) :: &
       qclvar, &     ! cloud water variance
+      skw_zt_out, & ! skewness of w on thermo levels 
       thlprcp_out   ! thl'rc'
 #endif
 
@@ -1843,6 +1844,7 @@ module advance_clubb_core_module
 #ifdef CLUBB_CAM
       qclvar(:) = rcp2_zt(:)
       thlprcp_out(:) = thlprcp(:)
+      skw_zt_out(:) = Skw_zt(1:gr%nz)
 #endif
 
 
