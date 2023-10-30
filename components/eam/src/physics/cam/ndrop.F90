@@ -650,7 +650,7 @@ subroutine dropmixnuc( &
                wbar, wmix, wdiab, wmin, wmax,           &
                temp(i,k), cs(i,k), naermod, ntot_amode, &
                vaerosol, hygro, zfn, zfm, zfluxn,       &
-               zfluxm,zflux_fullact(k),smaxout(i,k)     )
+               zfluxm,zflux_fullact(k),smax_out=smaxout(i,k) )
       end do
 
       !=======================================================================
