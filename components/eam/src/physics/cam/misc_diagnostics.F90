@@ -12,15 +12,14 @@ public :: supersat_q_ice
 public :: relhum_water_percent
 public :: relhum_ice_percent
 public :: compute_cape
+
+public :: cdmc_diag
 public :: cdnc_diag
-public :: cdnc_when_overcast
 public :: cdnc_masked_by_cldfrc
-public :: cdnc_when_qc_is_nonzero
-public :: column_has_small_cdnc_when_overcast
-public :: var3d_day_night
-public :: qcic_diag
 public :: tmp_numliq_update_after_activation
+
 public :: day_or_night
+public :: var3d_day_night
 
 contains
 
@@ -275,12 +274,13 @@ subroutine cdnc_diag( state, pbuf, pcols, pver, cdnc )
 !----------------------------------------------------------------------
 ! Purpose: diagnose in-cloud droplet number concentration (unit: 1/cc)
 ! History: first version by Hui Wan, 2022-06
+!          update by Hui Wan, 2023-10: set cdnc to zero if CLDLIQ < qsmall.
 !----------------------------------------------------------------------
 
   use physics_types,  only: physics_state
   use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
   use physconst,      only: rair
-  use micro_mg_utils, only: mincld
+  use micro_mg_utils, only: mincld, qsmall
   use constituents,   only: cnst_get_ind
 
   type(physics_state),intent(in),target:: state
@@ -289,24 +289,24 @@ subroutine cdnc_diag( state, pbuf, pcols, pver, cdnc )
   integer,                  intent(in) :: pver
   real(r8),                intent(out) :: cdnc(pcols,pver)
 
-  integer :: ncol, ixnumliq
+  integer :: ncol, idx, ixnumliq, ixcldliq
 
-  integer :: idx
-  real(r8), pointer :: liqcldf(:,:)  ! liquid cloud fraction 
+  real(r8), pointer :: liqcldf(:,:)  ! liquid cloud fraction, from pbuf
 
   real(r8) :: lcldm(pcols,pver)      ! liquid cloud fraction, clipped to mincld
   real(r8) ::   rho(pcols,pver)      ! air density 
 
   !-----------------------
+
   ncol = state%ncol
 
-  ! Assume the liquid cloud fraction (liqcldf) equals the total stratiform cloud fraction (ast).
-  ! This assumption follows the subroutine micro_mg_cam:micro_mg_cam_tend.
+  ! Following the subroutine micro_mg_cam:micro_mg_cam_tend, assume the liquid cloud
+  ! fraction (liqcldf) equals the total stratiform cloud fraction (AST in pbuf).
 
   idx = pbuf_get_index('AST') ; call pbuf_get_field(pbuf, idx, liqcldf)
 
-  ! Clip the liquid cloud fraction to avoid division by zero.
-  ! This treatment follows the subroutine micro_mg2_0:micro_mg_tend.
+  ! Following the subroutine micro_mg2_0:micro_mg_tend,
+  ! clip the liquid cloud fraction to avoid division by zero.
 
   lcldm(:ncol,:) = max( liqcldf(:ncol,:), mincld )
 
@@ -320,55 +320,38 @@ subroutine cdnc_diag( state, pbuf, pcols, pver, cdnc )
   call cnst_get_ind( 'NUMLIQ', ixnumliq )
   cdnc(:ncol,:) = state%q(:ncol,:,ixnumliq) * rho(:ncol,:) / lcldm(:ncol,:)
 
+  ! Since the MG cloud microphysics parameterization is calculated only when 
+  ! the grid-box mean droplet mass mixing ratio, CLDLIQ, is larger than qsmall,
+  ! here we mask out cells with CLDLIQ < qsmall by setting cdnc to 0. 
+
+  call cnst_get_ind( 'CLDLIQ', ixcldliq )
+  where( state%q(:ncol,:,ixcldliq).lt.qsmall ) cdnc(:ncol,:) = 0._r8 
+
 end subroutine cdnc_diag
 
-subroutine cdnc_when_overcast( state, pbuf, pcols, pver, cdnc_oc )
-!----------------------------------------------------------------------
-! Purpose: cdnc under overcast condition.
-! History: first version by Hui Wan, 2023-10
-!----------------------------------------------------------------------
+
+subroutine cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, cldfrc_varname, fmin, cdnc )
+!------------------------------------------------------------------------------------------------
+! Purpose: Provide CDNC values masked by cloud fraction.
+!  - In grid cells where cloud fraction is larger than or equal to the specified threshold,
+!    the diagnosed CDNCs are provided.
+!  - In grid cells where cloud fraction is smaller than the specified threshold,
+!    the diagnosed CDNCs are multiplied by -1.
+!
+! History: Hui Wan, 2023-10
+!------------------------------------------------------------------------------------------------
   use physics_types,  only: physics_state
   use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
-
-  type(physics_state),intent(in),target:: state
-  type(physics_buffer_desc),pointer    :: pbuf(:)
-  integer,                  intent(in) :: pcols
-  integer,                  intent(in) :: pver
-  real(r8),                intent(out) :: cdnc_oc(pcols,pver)
-
-  real(r8), parameter :: fmin = 0.9_r8
-  real(r8), pointer :: liqcldf(:,:)  ! liquid cloud fraction
-  integer :: ncol
-
-  !--------
-  ncol = state%ncol
-
-  call cdnc_diag( state, pbuf, pcols, pver, cdnc_oc )
-
-  call pbuf_get_field(pbuf, pbuf_get_index('ALST'), liqcldf)
-
-  where( liqcldf(1:ncol,:).lt.fmin ) cdnc_oc(1:ncol,:) = -1._r8 * cdnc_oc(1:ncol,:)
-  !--------
-
-end subroutine cdnc_when_overcast
-
-subroutine cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, cldfrc_varname, cdnc )
-!----------------------------------------------------------------------
-! Purpose: cdnc under overcast condition.
-! History: first version by Hui Wan, 2023-10
-!----------------------------------------------------------------------
-  use physics_types,  only: physics_state
-  use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
-  use micro_mg_utils, only: mincld
 
   type(physics_state),intent(in),target:: state
   type(physics_buffer_desc),pointer    :: pbuf(:)
   integer,                  intent(in) :: pcols
   integer,                  intent(in) :: pver
   character(len=*),         intent(in) :: cldfrc_varname
+  real(r8),                 intent(in) :: fmin 
   real(r8),                intent(out) :: cdnc(pcols,pver)
 
-  real(r8), pointer :: cldfrc(:,:)  ! cloud fraction
+  real(r8), pointer :: cldfrc(:,:)   ! cloud fraction
   integer :: ncol
 
   !--------
@@ -376,106 +359,32 @@ subroutine cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, cldfrc_varname, cdnc
 
   call cdnc_diag( state, pbuf, pcols, pver, cdnc )
 
-  call pbuf_get_field(pbuf, pbuf_get_index(trim(cldfrc_varname)), cldfrc)
+  call pbuf_get_field(pbuf, pbuf_get_index(trim(adjustl(cldfrc_varname))), cldfrc)
 
-  where( cldfrc(1:ncol,:).lt.mincld ) cdnc(1:ncol,:) = -1._r8 * cdnc(1:ncol,:)
+  where( cldfrc(1:ncol,:).lt.fmin ) cdnc(1:ncol,:) = -1._r8 * cdnc(1:ncol,:)
   !--------
 
 end subroutine cdnc_masked_by_cldfrc
 
-subroutine cdnc_when_qc_is_nonzero( state, pbuf, pcols, pver, cdnc )
-!----------------------------------------------------------------------
-! Purpose: cdnc under overcast condition.
-! History: first version by Hui Wan, 2023-10
-!----------------------------------------------------------------------
-  use physics_types,  only: physics_state
-  use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
-  use constituents,   only: cnst_get_ind
-  use micro_mg_utils, only: qsmall 
 
-  type(physics_state),intent(in),target:: state
-  type(physics_buffer_desc),pointer    :: pbuf(:)
-  integer,                  intent(in) :: pcols
-  integer,                  intent(in) :: pver
-  real(r8),                intent(out) :: cdnc(pcols,pver)
-
-  real(r8) :: qc(pcols,pver)  ! cloud liquid mixing ratio (grid-box mean)
-  integer :: ncol, ixcldliq
-
-  !--------
-  ncol = state%ncol
-
-  call cdnc_diag( state, pbuf, pcols, pver, cdnc )
-
-  call cnst_get_ind( 'CLDLIQ', ixcldliq )
-  qc(:ncol,:) = state%q(:ncol,:,ixcldliq)
-
-  where( qc(:ncol,:).lt.qsmall ) cdnc(:ncol,:) = -1._r8 * cdnc(:ncol,:)
-  !--------
-
-end subroutine cdnc_when_qc_is_nonzero
-
-subroutine column_has_small_cdnc_when_overcast( state, pbuf, pcols, pver, flag_out )
-!----------------------------------------------------------------------
-! Purpose: cdnc under overcast condition.
-! History: first version by Hui Wan, 2023-10
-!----------------------------------------------------------------------
-  use physics_types,  only: physics_state
-  use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
-
-  type(physics_state),intent(in),target:: state
-  type(physics_buffer_desc),pointer    :: pbuf(:)
-  integer,                  intent(in) :: pcols
-  integer,                  intent(in) :: pver
-  real(r8),                intent(out) :: flag_out(pcols)
-
-  real(r8)          :: cdnc(pcols,pver)
-  real(r8), pointer :: cldf(:,:)  ! liquid cloud fraction
-
-  integer(r8) :: flag_by_lev(pcols,pver)
-  integer     :: ncol
-
-  integer, parameter :: kmin   = 49      ! approximately 600 hPa in L72
-  real(r8),parameter :: fmin   = 0.9_r8
-  integer, parameter :: cntmin = 2
-
-  !-----------------------
-  flag_by_lev(:,:) = 0
-
-  call cdnc_diag( state, pbuf, pcols, pver, cdnc )
-  call pbuf_get_field(pbuf, pbuf_get_index('AST'), cldf)
-
-  ncol = state%ncol
-  where( abs( cdnc(1:ncol,kmin:) - 5e6 ).lt.4.99e6  & 
-        .and. cldf(1:ncol,kmin:).ge.fmin          ) &
-  flag_by_lev(1:ncol,kmin:) = 1
-
-  ! count the number of grid levels in each column that satisfy the condition.
-  ! If the count is no smaller thatn cntmin, then flag the column.
-
-  flag_out(:) = -1._r8 
-  where( sum( flag_by_lev(1:ncol,:), 2 ).ge.cntmin ) flag_out(1:ncol) = 1._r8
-
-  !-----------------------
-end subroutine column_has_small_cdnc_when_overcast
-
-subroutine qcic_diag( state, pbuf, pcols, pver, qcic )
-!----------------------------------------------------------------------
+subroutine cdmc_diag( state, pbuf, pcols, pver, cdmc )
+!-----------------------------------------------------------------------------
 ! Purpose: diagnose in-cloud droplet mass concentration (unit: g/cc)
 ! History: first version by Hui Wan, 2022-06
-!----------------------------------------------------------------------
+!          update by Hui Wan, 2023-10: set output to zero if CLDLIQ < qsmall.
+!-----------------------------------------------------------------------------
 
   use physics_types,  only: physics_state
   use physics_buffer, only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
   use physconst,      only: rair
-  use micro_mg_utils, only: mincld
+  use micro_mg_utils, only: mincld, qsmall
   use constituents,   only: cnst_get_ind
 
   type(physics_state),intent(in),target:: state
   type(physics_buffer_desc),pointer    :: pbuf(:)
   integer,                  intent(in) :: pcols
   integer,                  intent(in) :: pver
-  real(r8),                intent(out) :: qcic(pcols,pver)
+  real(r8),                intent(out) :: cdmc(pcols,pver)
 
   integer :: ncol, ixcldliq
 
@@ -506,9 +415,16 @@ subroutine qcic_diag( state, pbuf, pcols, pver, qcic )
   ! Now, calculate the in-cloud droplet mass concentration
 
   call cnst_get_ind( 'CLDLIQ', ixcldliq )
-  qcic(:ncol,:) = 1000._r8* state%q(:ncol,:,ixcldliq) * rho(:ncol,:) / lcldm(:ncol,:)
+  cdmc(:ncol,:) = 1000._r8* state%q(:ncol,:,ixcldliq) * rho(:ncol,:) / lcldm(:ncol,:)
 
-end subroutine qcic_diag
+  ! Since the MG cloud microphysics parameterization is calculated only when 
+  ! the grid-box mean droplet mass mixing ratio, CLDLIQ, is larger than qsmall,
+  ! here we mask out cells with CLDLIQ < qsmall by setting cdmc to 0. 
+
+  where( state%q(:ncol,:,ixcldliq).lt.qsmall ) cdmc(:ncol,:) = 0._r8 
+
+end subroutine cdmc_diag
+
 
 subroutine tmp_numliq_update_after_activation( state_in, pbuf, dt, state_out )
 
