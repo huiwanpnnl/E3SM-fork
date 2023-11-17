@@ -591,23 +591,14 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
           call day_or_night( state, pbuf, pcols, pver, tmp1d )
           call var3d_day_night( ncol, pcols, pver, tmp1d, tmp, arrayout )
 
-        case ('CDNC_OC')
-          call cdnc_when_overcast( state, pbuf, pcols, pver, arrayout )
+        case ('CDNCfs09')
+          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, 'AST',  0.9_r8, arrayout )
 
-        case ('CDNC_AST')
-          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, 'AST', arrayout )
+        case ('CDNCfl09')
+          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, 'ALST', 0.9_r8, arrayout )
 
-        case ('CDNCALST')
-          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, 'ALST', arrayout )
-
-        case ('CDNC_QC')
-          call cdnc_when_qc_is_nonzero( state, pbuf, pcols, pver, arrayout )
-
-        case ('COLFLAG')
-          call column_has_small_cdnc_when_overcast( state, pbuf, pcols, pver, arrayout(:,1) )
-
-        case ('QCIC')
-          call qcic_diag( state, pbuf, pcols, pver, arrayout )
+        case ('QCIC','CDMC')
+          call cdmc_diag( state, pbuf, pcols, pver, arrayout )
 
         case ('DAYNIGHT')
           call day_or_night( state, pbuf, pcols, pver, arrayout(:,1) )
