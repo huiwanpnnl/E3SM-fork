@@ -398,6 +398,9 @@ subroutine dropmixnuc( &
    real(r8) :: srcnclr(pcols,pver)            ! droplet number source (#/kg/s)
    real(r8) :: srcevap(pcols,pver)            ! droplet number source (#/kg/s)
    real(r8) :: smaxout(pcols,pver)
+   real(r8) ::  cbfrac(pcols,pver)            ! cloudbase fraction
+   real(r8) ::  cbpres(pcols,pver)            ! cloudbase pressure 
+   integer  :: kkk
 
    real(r8) :: nsource(pcols,pver)            ! droplet number source (#/kg/s)
    real(r8) :: ndropmix(pcols,pver)           ! droplet number mixing (#/kg/s)
@@ -555,6 +558,8 @@ subroutine dropmixnuc( &
    srcevap(:,:) = 0._r8
 
    smaxout(:,:) = 0._r8
+    cbfrac(:,:) = 0._r8
+    cbpres(:,:) = 0._r8
    !=================================================
    ! overall_main_i_loop
    !=================================================
@@ -836,12 +841,14 @@ subroutine dropmixnuc( &
 
                if (k < pver) then
                   dumc = cldn(i,k) - cldn(i,kp1)
+                  cbfrac(i,k) = dumc   ! save cloudbase fraction to pbuf for diagnostics
                else
                   if(regen_fix) then 
                      dumc=0._r8
                   else
                      dumc = cldn(i,k)
                   endif
+                  cbfrac(i,k) = cldn(i,k)   ! save cloudbase fraction to pbuf for diagnostics
                endif
 
                fluxntot = 0
@@ -1169,10 +1176,29 @@ subroutine dropmixnuc( &
    ! end of main loop over i/longitude ....................................
    !===========================================================================
 
+   ! Find cloudbase pressure for diagnostics/output
+   do i = 1, ncol
+   do k = top_lev, pver
+
+      ! Search from the current lev downward. The first level with cloudbase fraction > 0
+      ! is considered the cloudbase.
+
+      do kkk = k,pver
+         if (cbfrac(i,k).gt.0_r8) then
+            cbpres(i,k) = pmid(i,k)
+            exit
+         end if
+      end do
+
+   end do
+   end do
+
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPSRC'), ptr2d ); ptr2d = nsource
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPMIX'), ptr2d ); ptr2d = ndropmix
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPW'  ), ptr2d ); ptr2d = wtke
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPWSB'), ptr2d ); ptr2d = wsub
+   call pbuf_get_field( pbuf, pbuf_get_index('NDROPCBF'), ptr2d ); ptr2d = cbfrac
+   call pbuf_get_field( pbuf, pbuf_get_index('NDROPCBP'), ptr2d ); ptr2d = cbpres
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCGROW'), ptr2d ); ptr2d = srcgrow
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCSHRK'), ptr2d ); ptr2d = srcshrk
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCNACT'), ptr2d ); ptr2d = srcnact
