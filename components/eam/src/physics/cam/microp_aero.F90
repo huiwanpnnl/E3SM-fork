@@ -148,6 +148,8 @@ subroutine microp_aero_register
    call pbuf_add_field('NDROPMIX',   'global',dtype_r8,(/pcols,pver/), idx)
    call pbuf_add_field('NDROPW',     'global',dtype_r8,(/pcols,pver/), idx)
    call pbuf_add_field('NDROPWSB',   'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NDROPCBF',   'global',dtype_r8,(/pcols,pver/), idx)
+   call pbuf_add_field('NDROPCBP',   'global',dtype_r8,(/pcols,pver/), idx)
 
    call pbuf_add_field('NSRCGROW',   'global',dtype_r8,(/pcols,pver/), idx)
    call pbuf_add_field('NSRCSHRK',   'global',dtype_r8,(/pcols,pver/), idx)
@@ -155,6 +157,7 @@ subroutine microp_aero_register
    call pbuf_add_field('NSRCNCLR',   'global',dtype_r8,(/pcols,pver/), idx)
    call pbuf_add_field('NSRCEVAP',   'global',dtype_r8,(/pcols,pver/), idx)
    call pbuf_add_field('NDROPSMX',   'global',dtype_r8,(/pcols,pver/), idx)
+
 
    call pbuf_add_field('RNDST',      'physpkg',dtype_r8,(/pcols,pver,4/), rndst_idx)
    call pbuf_add_field('NACON',      'physpkg',dtype_r8,(/pcols,pver,4/), nacon_idx)
