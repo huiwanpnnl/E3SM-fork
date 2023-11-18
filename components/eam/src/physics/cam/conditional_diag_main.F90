@@ -600,6 +600,9 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
         case ('QCIC','CDMC')
           call cdmc_diag( state, pbuf, pcols, pver, arrayout )
 
+        case ('RAL')
+          call droplet_mean_radius( state, pbuf, pcols, pver, arrayout )
+
         case ('DAYNIGHT')
           call day_or_night( state, pbuf, pcols, pver, arrayout(:,1) )
 
