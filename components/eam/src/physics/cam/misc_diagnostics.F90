@@ -16,6 +16,7 @@ public :: compute_cape
 public :: cdmc_diag
 public :: cdnc_diag
 public :: cdnc_masked_by_cldfrc
+public :: droplet_mean_radius
 public :: tmp_numliq_update_after_activation
 
 public :: day_or_night
@@ -272,7 +273,7 @@ subroutine compute_cape( state, pbuf, pcols, pver, cape )
 
 subroutine cdnc_diag( state, pbuf, pcols, pver, cdnc )
 !----------------------------------------------------------------------
-! Purpose: diagnose in-cloud droplet number concentration (unit: 1/cc)
+! Purpose: diagnose in-cloud droplet number concentration (unit: 1/m3)
 ! History: first version by Hui Wan, 2022-06
 !          update by Hui Wan, 2023-10: set cdnc to zero if CLDLIQ < qsmall.
 !----------------------------------------------------------------------
@@ -289,7 +290,7 @@ subroutine cdnc_diag( state, pbuf, pcols, pver, cdnc )
   integer,                  intent(in) :: pver
   real(r8),                intent(out) :: cdnc(pcols,pver)
 
-  integer :: ncol, idx, ixnumliq, ixcldliq
+  integer :: ncol, ixnumliq, ixcldliq
 
   real(r8), pointer :: liqcldf(:,:)  ! liquid cloud fraction, from pbuf
 
@@ -303,7 +304,7 @@ subroutine cdnc_diag( state, pbuf, pcols, pver, cdnc )
   ! Following the subroutine micro_mg_cam:micro_mg_cam_tend, assume the liquid cloud
   ! fraction (liqcldf) equals the total stratiform cloud fraction (AST in pbuf).
 
-  idx = pbuf_get_index('AST') ; call pbuf_get_field(pbuf, idx, liqcldf)
+  call pbuf_get_field(pbuf, pbuf_get_index('AST'), liqcldf)
 
   ! Following the subroutine micro_mg2_0:micro_mg_tend,
   ! clip the liquid cloud fraction to avoid division by zero.
@@ -369,9 +370,10 @@ end subroutine cdnc_masked_by_cldfrc
 
 subroutine cdmc_diag( state, pbuf, pcols, pver, cdmc )
 !-----------------------------------------------------------------------------
-! Purpose: diagnose in-cloud droplet mass concentration (unit: g/cc)
+! Purpose: diagnose in-cloud droplet mass concentration (unit: kg/m3)
 ! History: first version by Hui Wan, 2022-06
 !          update by Hui Wan, 2023-10: set output to zero if CLDLIQ < qsmall.
+!          update by Hui Wan, 2023-11: correct unit conversion
 !-----------------------------------------------------------------------------
 
   use physics_types,  only: physics_state
@@ -388,7 +390,6 @@ subroutine cdmc_diag( state, pbuf, pcols, pver, cdmc )
 
   integer :: ncol, ixcldliq
 
-  integer :: idx
   real(r8), pointer :: liqcldf(:,:)  ! liquid cloud fraction 
 
   real(r8) :: lcldm(pcols,pver)      ! liquid cloud fraction, clipped to mincld
@@ -400,7 +401,7 @@ subroutine cdmc_diag( state, pbuf, pcols, pver, cdmc )
   ! Assume the liquid cloud fraction (liqcldf) equals the total stratiform cloud fraction (ast).
   ! This assumption follows the subroutine micro_mg_cam:micro_mg_cam_tend.
 
-  idx = pbuf_get_index('AST') ; call pbuf_get_field(pbuf, idx, liqcldf)
+  call pbuf_get_field(pbuf, pbuf_get_index('AST'), liqcldf)
 
   ! Clip the liquid cloud fraction to avoid division by zero.
   ! This treatment follows the subroutine micro_mg2_0:micro_mg_tend.
@@ -415,7 +416,7 @@ subroutine cdmc_diag( state, pbuf, pcols, pver, cdmc )
   ! Now, calculate the in-cloud droplet mass concentration
 
   call cnst_get_ind( 'CLDLIQ', ixcldliq )
-  cdmc(:ncol,:) = 1000._r8* state%q(:ncol,:,ixcldliq) * rho(:ncol,:) / lcldm(:ncol,:)
+  cdmc(:ncol,:) = state%q(:ncol,:,ixcldliq) * rho(:ncol,:) / lcldm(:ncol,:)
 
   ! Since the MG cloud microphysics parameterization is calculated only when 
   ! the grid-box mean droplet mass mixing ratio, CLDLIQ, is larger than qsmall,
@@ -425,6 +426,57 @@ subroutine cdmc_diag( state, pbuf, pcols, pver, cdmc )
 
 end subroutine cdmc_diag
 
+
+subroutine droplet_mean_radius( state, pbuf, pcols, pver, ra_mean )
+!-----------------------------------------------------------------------------
+! Purpose: Diagnose mean radius of cloud droplets (unit: m3).
+!          Note that this is different from the effective radius diagnosed
+!          in the cloud microphysics parameterization in two aspects:
+!          1. Here we simply calculate the mean mass of each droplet
+!             by dividing the total mass by total number, and then calculate
+!             the corresponding radius, assuming droplets are spherical.
+!          2. Here we do not bound the radius by a prescribed range.
+! History: first version by Hui Wan, 2023-11
+!-----------------------------------------------------------------------------
+
+  use physics_types,  only: physics_state
+  use physics_buffer, only: physics_buffer_desc
+  use physconst,      only: rhoh2o, pi
+  use micro_mg_utils, only: qsmall
+  use constituents,   only: cnst_get_ind
+
+  type(physics_state),intent(in),target:: state
+  type(physics_buffer_desc),pointer    :: pbuf(:)
+  integer,                  intent(in) :: pcols
+  integer,                  intent(in) :: pver
+  real(r8),                intent(out) :: ra_mean(pcols,pver)
+
+  integer :: ncol, ixcldliq
+
+  real(r8) :: qcic(pcols,pver)      ! in-cloud droplet mass mixing ratio
+  real(r8) :: ncic(pcols,pver)      ! in-cloud droplet number mixing ratio
+
+  real(r8),parameter :: mass_to_radius_cubed = 3._r8/(4._r8*pi*rhoh2o)
+  real(r8),parameter :: one_third            = 1._r8/3._r8
+
+  !-----------------------
+  ncol = state%ncol
+
+  call cdmc_diag( state, pbuf, pcols, pver, qcic )
+  call cdnc_diag( state, pbuf, pcols, pver, ncic )
+
+  call cnst_get_ind( 'CLDLIQ', ixcldliq )
+  where( state%q(:ncol,:,ixcldliq).lt.qsmall )
+
+    ra_mean(:ncol,:) = 0._r8
+
+  else where
+    ra_mean(:ncol,:) = ( qcic(:ncol,:)/max(ncic(:ncol,:),qsmall) *mass_to_radius_cubed )**one_third
+
+  end where
+  !-----------------------
+
+end subroutine droplet_mean_radius
 
 subroutine tmp_numliq_update_after_activation( state_in, pbuf, dt, state_out )
 
