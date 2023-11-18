@@ -400,7 +400,7 @@ subroutine dropmixnuc( &
    real(r8) :: smaxout(pcols,pver)
    real(r8) ::  cbfrac(pcols,pver)            ! cloudbase fraction
    real(r8) ::  cbpres(pcols,pver)            ! cloudbase pressure 
-   integer  :: kkk
+   integer  :: kb
 
    real(r8) :: nsource(pcols,pver)            ! droplet number source (#/kg/s)
    real(r8) :: ndropmix(pcols,pver)           ! droplet number mixing (#/kg/s)
@@ -942,6 +942,10 @@ subroutine dropmixnuc( &
 
       end do  ! old_cloud_main_k_loop
 
+     !if (loop_up_bnd<pver) then
+     !   cbfrac(i,pver) = cldn(i,pver)   ! save cloudbase fraction to pbuf for diagnostics
+     !end if
+
       ! switch nsav, nnew so that nnew is the updated aerosol
       ntemp = nsav
       nsav  = nnew
@@ -1183,9 +1187,9 @@ subroutine dropmixnuc( &
       ! Search from the current lev downward. The first level with cloudbase fraction > 0
       ! is considered the cloudbase.
 
-      do kkk = k,pver
-         if (cbfrac(i,k).gt.0_r8) then
-            cbpres(i,k) = pmid(i,k)
+      do kb = k,pver
+         if (cbfrac(i,kb).gt.0_r8) then
+            cbpres(i,k) = pmid(i,kb) - pmid(i,k)
             exit
          end if
       end do
