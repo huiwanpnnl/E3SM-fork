@@ -398,8 +398,9 @@ subroutine dropmixnuc( &
    real(r8) :: srcnclr(pcols,pver)            ! droplet number source (#/kg/s)
    real(r8) :: srcevap(pcols,pver)            ! droplet number source (#/kg/s)
    real(r8) :: smaxout(pcols,pver)
-   real(r8) ::  cbfrac(pcols,pver)            ! cloudbase fraction
-   real(r8) ::  cbpres(pcols,pver)            ! cloudbase pressure 
+   real(r8) :: cbfgrid(pcols,pver)  ! cloudbase fraction in the current grid box (-)
+   real(r8) :: cbdistp(pcols,pver)  ! distance to cloudbase expressed as pressure (Pa)
+   real(r8) :: cbdistk(pcols,pver)  ! distance to cloudbase expressed as number of model levels (-)
    integer  :: kb
 
    real(r8) :: nsource(pcols,pver)            ! droplet number source (#/kg/s)
@@ -558,8 +559,9 @@ subroutine dropmixnuc( &
    srcevap(:,:) = 0._r8
 
    smaxout(:,:) = 0._r8
-    cbfrac(:,:) = 0._r8
-    cbpres(:,:) = 0._r8
+   cbfgrid(:,:) = 0._r8
+   cbdistp(:,:) = 0._r8
+   cbdistk(:,:) = 0._r8
    !=================================================
    ! overall_main_i_loop
    !=================================================
@@ -841,15 +843,14 @@ subroutine dropmixnuc( &
 
                if (k < pver) then
                   dumc = cldn(i,k) - cldn(i,kp1)
-                  cbfrac(i,k) = dumc   ! save cloudbase fraction to pbuf for diagnostics
                else
                   if(regen_fix) then 
                      dumc=0._r8
                   else
                      dumc = cldn(i,k)
                   endif
-                  cbfrac(i,k) = cldn(i,k)   ! save cloudbase fraction to pbuf for diagnostics
                endif
+               cbfgrid(i,k) = dumc   ! save cloudbase fraction for diagnostics
 
                fluxntot = 0
 
@@ -941,10 +942,6 @@ subroutine dropmixnuc( &
          end if
 
       end do  ! old_cloud_main_k_loop
-
-     !if (loop_up_bnd<pver) then
-     !   cbfrac(i,pver) = cldn(i,pver)   ! save cloudbase fraction to pbuf for diagnostics
-     !end if
 
       ! switch nsav, nnew so that nnew is the updated aerosol
       ntemp = nsav
@@ -1188,8 +1185,9 @@ subroutine dropmixnuc( &
       ! is considered the cloudbase.
 
       do kb = k,pver
-         if (cbfrac(i,kb).gt.0_r8) then
-            cbpres(i,k) = pmid(i,kb) - pmid(i,k)
+         if (cbfgrid(i,kb).gt.0_r8) then
+            cbdistp(i,k) = pmid(i,kb) - pmid(i,k)
+            cbdistk(i,k) = kb - k
             exit
          end if
       end do
@@ -1201,8 +1199,9 @@ subroutine dropmixnuc( &
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPMIX'), ptr2d ); ptr2d = ndropmix
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPW'  ), ptr2d ); ptr2d = wtke
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPWSB'), ptr2d ); ptr2d = wsub
-   call pbuf_get_field( pbuf, pbuf_get_index('NDROPCBF'), ptr2d ); ptr2d = cbfrac
-   call pbuf_get_field( pbuf, pbuf_get_index('NDROPCBP'), ptr2d ); ptr2d = cbpres
+   call pbuf_get_field( pbuf, pbuf_get_index('CBFGRID' ), ptr2d ); ptr2d = cbfgrid
+   call pbuf_get_field( pbuf, pbuf_get_index('CBDISTP' ), ptr2d ); ptr2d = cbdistp
+   call pbuf_get_field( pbuf, pbuf_get_index('CBDISTK' ), ptr2d ); ptr2d = cbdistk
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCGROW'), ptr2d ); ptr2d = srcgrow
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCSHRK'), ptr2d ); ptr2d = srcshrk
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCNACT'), ptr2d ); ptr2d = srcnact
