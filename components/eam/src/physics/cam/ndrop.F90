@@ -96,6 +96,8 @@ logical :: lq(pcnst) = .false. ! set flags true for constituents with non-zero t
 logical :: fix_g1_err_ndrop = .false. !BSINGH - default is false
 logical :: regen_fix 
 
+real(r8) :: cldf_growth_threshold = 0.01_r8  ! 0.01 was used in E3SMv1 and v2
+
 !===============================================================================
 contains
 !===============================================================================
@@ -205,6 +207,7 @@ subroutine ndrop_init
                      history_aerosol_out = history_aerosol, &
                      prog_modal_aero_out=prog_modal_aero, & 
                      fix_g1_err_ndrop_out = fix_g1_err_ndrop, &
+                     ndrop_cldf_growth_threshold_out = cldf_growth_threshold, &
                      regen_fix_out=regen_fix                )
 
 
@@ -744,8 +747,11 @@ grow_shrink_ipass_loop:  &
             ! when ipass_grow_shrink = 2 (and cldo < cldn), grow from cldo to cldn
 
 ! rce 2024.02.12 - reduce the 0.01 change criterion to 0.001
+!        if (cldn_tmp-cldo_tmp > 0.001_r8) then
+! Cloud fraction change threshold in the publicly released E3SMv1 and v2 was 0.01
 !        if (cldn_tmp-cldo_tmp > 0.01_r8) then
-         if (cldn_tmp-cldo_tmp > 0.001_r8) then
+
+         if (cldn_tmp-cldo_tmp > cldf_growth_threshold) then
 
             ! rce-comment - use wtke at layer centers for new-cloud activation
             wbar  = wtke_cen(i,k)

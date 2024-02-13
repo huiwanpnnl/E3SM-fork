@@ -3053,6 +3053,13 @@ aerosol regeration bug in ndrop.F90
 Default: .false.
 </entry>
 
+<entry id="ndrop_cldf_growth_threshold" type="real" category="conv"
+       group="phys_ctl_nl" valid_values="" >
+Cloud fraction increment threshold. When cloud fraction change
+exceeds this value, aerosol particles can be activated in "new" clouds.
+Default: 0.01
+</entry>
+
 <entry id="liqcf_fix" type="logical" category="conv"
        group="phys_ctl_nl" valid_values="" >
 This is part of PNNL bug fixes under Polar project.It fixes the
