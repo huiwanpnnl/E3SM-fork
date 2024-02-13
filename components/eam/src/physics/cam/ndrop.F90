@@ -683,9 +683,19 @@ grow_shrink_ipass_loop:  &
             ! when ipass_grow_shrink = 1, dissipate (shrink) then regenerate (grow) a portion of cldo
             if ( regen_fix ) cycle grow_shrink_ipass_loop
             cldo_tmp = cldo(i,k)
-            cldn_tmp = cldo(i,k) * exp( -dtmicro/tau_cld_regenerate )
-          ! alternate formulation
-          ! cldn_tmp = cldn(i,k) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
+
+          ! Formulation in E3SMv1 and v2 (which was not used in default runs, as regen_fix = .true. by default)
+          ! cldn_tmp = cldn(i,k) * exp( -dtmicro/tau_cld_regenerate )
+          !
+          ! Corrected by Hui Wan, 2024-02-13, with confirmation from Dick Easter
+          ! cldn_tmp = cldo(i,k) * exp( -dtmicro/tau_cld_regenerate )
+          !
+          ! alternate formulation (corrected). This is Dick's recommendation.
+          !  - It's more consistent with the description on pages 10-11 in the Supplement
+          !    of Liu et al. (2012, doi:10.5194/gmd-5-709-2012)
+          !  - It gives a 100% (instead of 63%) regeneration when dtmicro = tau_cld_regenerate
+
+            cldn_tmp = cldo(i,k) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
          else
             ! when ipass_grow_shrink = 2 (and cldo /= cldn), treat change in cloud fraction from cldo to cldn
             cldo_tmp = cldo(i,k)
