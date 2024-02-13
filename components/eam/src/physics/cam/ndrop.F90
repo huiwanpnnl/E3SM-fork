@@ -351,6 +351,7 @@ subroutine dropmixnuc( &
    real(r8) :: sq2pi
 
    integer  :: i, k, l, m, mm, n
+   integer  :: ipass_grow_shrink
    integer  :: km1, kp1
    integer  :: nnew, nsav, ntemp
    integer  :: lptr
@@ -671,19 +672,33 @@ subroutine dropmixnuc( &
       ! grow_shrink_main_k_loop: &
       do k = top_lev, pver
 
-         ! shrinking cloud ......................................................
-         !    treat the reduction of cloud fraction from when cldn(i,k) < cldo(i,k)
-         !    and also dissipate the portion of the cloud that will be regenerated
-         cldo_tmp = cldo(i,k)
+! rce 2024.02.12 - added next 15 lines
+grow_shrink_ipass_loop:  &
+         do ipass_grow_shrink = 1, 2
 
-         if(regen_fix) then 
-            cldn_tmp = cldn(i,k) !* exp( -dtmicro/tau_cld_regenerate )!HW: there is a bug here; turn off regeneration,01/10/2012
-         else
+         if (ipass_grow_shrink == 1) then
+            ! when ipass_grow_shrink = 1, dissipate (shrink) then regenerate (grow) a portion of cldo
+            if ( regen_fix ) cycle grow_shrink_ipass_loop
+            cldo_tmp = cldo(i,k)
             cldn_tmp = cldn(i,k) * exp( -dtmicro/tau_cld_regenerate )
-         endif
-         !    alternate formulation
-         !    cldn_tmp = cldn(i,k) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
+          ! alternate formulation
+          ! cldn_tmp = cldn(i,k) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
+         else
+            ! when ipass_grow_shrink = 2 (and cldo /= cldn), treat change in cloud fraction from cldo to cldn
+            cldo_tmp = cldo(i,k)
+            cldn_tmp = cldn(i,k)
+         end if
 
+! rce 2024.02.12 - deactivated next 7 lines
+!        if(regen_fix) then 
+!           cldn_tmp = cldn(i,k) !* exp( -dtmicro/tau_cld_regenerate )!HW: there is a bug here; turn off regeneration,01/10/2012
+!        else
+!           cldn_tmp = cldn(i,k) * exp( -dtmicro/tau_cld_regenerate )
+!        endif
+!        !    alternate formulation
+!        !    cldn_tmp = cldn(i,k) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
+
+         ! shrinking cloud ......................................................
          if (cldn_tmp < cldo_tmp) then
             !  droplet loss in decaying cloud
             !++ sungsup
@@ -712,14 +727,25 @@ subroutine dropmixnuc( &
          ! growing cloud ......................................................
          !    treat the increase of cloud fraction from when cldn(i,k) > cldo(i,k)
          !    and also regenerate part of the cloud 
-         if(regen_fix) then 
-            cldo_tmp = cldo(i,k)! HW turned off the regeneration growing 
-         else
-            cldo_tmp = cldn_tmp
-         endif
-         cldn_tmp = cldn(i,k)
+! rce 2024.02.12 - deactivated next 6 lines
+!        if(regen_fix) then 
+!           cldo_tmp = cldo(i,k)! HW turned off the regeneration growing 
+!        else
+!           cldo_tmp = cldn_tmp
+!        endif
+!        cldn_tmp = cldn(i,k)
 
-         if (cldn_tmp-cldo_tmp > 0.01_r8) then
+! rce 2024.02.12 - added next 6 lines
+         if (ipass_grow_shrink == 1) then
+            ! when ipass_grow_shrink = 1, regenerate the portion of cldo that was dissipated
+            cldo_tmp = cldn_tmp 
+            cldn_tmp = cldo(i,k)
+         end if
+            ! when ipass_grow_shrink = 2 (and cldo < cldn), grow from cldo to cldn
+
+! rce 2024.02.12 - reduce the 0.01 change criterion to 0.001
+!        if (cldn_tmp-cldo_tmp > 0.01_r8) then
+         if (cldn_tmp-cldo_tmp > 0.001_r8) then
 
             ! rce-comment - use wtke at layer centers for new-cloud activation
             wbar  = wtke_cen(i,k)
@@ -767,6 +793,8 @@ subroutine dropmixnuc( &
                enddo
             enddo
          endif
+
+         enddo grow_shrink_ipass_loop
 
       enddo  ! grow_shrink_main_k_loop
       ! end of k-loop for growing/shrinking cloud calcs ......................
