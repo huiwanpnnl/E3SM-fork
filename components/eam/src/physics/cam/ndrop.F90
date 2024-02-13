@@ -680,7 +680,7 @@ grow_shrink_ipass_loop:  &
             ! when ipass_grow_shrink = 1, dissipate (shrink) then regenerate (grow) a portion of cldo
             if ( regen_fix ) cycle grow_shrink_ipass_loop
             cldo_tmp = cldo(i,k)
-            cldn_tmp = cldn(i,k) * exp( -dtmicro/tau_cld_regenerate )
+            cldn_tmp = cldo(i,k) * exp( -dtmicro/tau_cld_regenerate )
           ! alternate formulation
           ! cldn_tmp = cldn(i,k) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
          else
