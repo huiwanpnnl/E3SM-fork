@@ -354,7 +354,25 @@ subroutine dropmixnuc( &
    real(r8) :: sq2pi
 
    integer  :: i, k, l, m, mm, n
-   integer  :: ipass_grow_shrink
+
+   integer,parameter :: ipass_evolv = 2   ! regular grow-shrink calculation
+   integer,parameter :: ipass_regen = 1   ! extra grow-shrink calculation for cloud regeneration
+
+   integer  :: ipass_grow_shrink  ! loop index
+   integer  :: ipass_start        ! loop index lower bound
+   integer  :: ipass_end          ! loop index upper bound
+
+   integer,parameter :: ishnk = 1   ! the shrinking-cloud code block
+   integer,parameter :: igrow = 2   ! the growing-cloud code block
+
+   ! The next two arrays are cloud fractions.
+   ! The second dimension has a size of 2 because we need to distinguish the regular and extra grow-shrink calculations;
+   ! The first  dimension has a size of 2 because we have 2 substeps (shrink then grow) in the extra calculation
+   ! that deals with cloud regeneration.
+
+   real(r8) :: cld_fm(2,2,pcols,pver)  ! starting ("from") cloud fraction in a grow-shrink code block
+   real(r8) :: cld_to(2,2,pcols,pver)  ! ending   ("to")   cloud fraction in a grow-shrink code block
+
    integer  :: km1, kp1
    integer  :: nnew, nsav, ntemp
    integer  :: lptr
@@ -566,6 +584,74 @@ subroutine dropmixnuc( &
    cbfgrid(:,:) = 0._r8
    cbdistp(:,:) = 0._r8
    cbdistk(:,:) = 0._r8
+
+   !-------------------------------------------------------------------------------------------------
+   ! Prep work for the "grow_shrink_ipass_loop" below
+   !-------------------------------------------------------------------------------------------------
+   ! tau_cld_regenerate = time scale for regeneration of cloudy air 
+   !    by (horizontal) exchange with clear air
+
+   tau_cld_regenerate = 3600.0_r8 * 3.0_r8
+
+   ! Regardless of whether regeneration is turned on or off, there is a "regular" cloud grow-shrink
+   ! calculation that deals with cloud fraction evolution from cldo(i,k) to cldn(i,k).
+   ! If regeneration is turned on, we do an extra grow-shrink calculation before the regular one.
+
+   if (.not.regen_fix) then  ! regeneration is ON
+
+      ipass_start = ipass_regen   ! the "grow_shrink_ipass_loop" will start with the extra step
+
+      ! The extra step contains two sub-steps.
+      ! *************
+      !  Sub-step 1 
+      ! *************
+      !  Let the old clouds shrink from cldo(i,k) to an assumed (smaller) value. What smaller value, then?
+      !
+      !  - Formulation in E3SMv1 and v2 (which was not used in default runs, as regen_fix = .true. by default)
+      !    cldn_tmp = cldn(i,k) * exp( -dtmicro/tau_cld_regenerate )
+      !
+      !  - Corrected by Hui Wan, 2024-02-13, with confirmation from Dick Easter
+      !    cldn_tmp = cldo(i,k) * exp( -dtmicro/tau_cld_regenerate )
+      !
+      !  - Alternate formulation (corrected on 2024-02-13). This is Dick's recommendation.
+      !    cldn_tmp = cldo(i,k) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
+      !     * It's more consistent with the description on pages 10-11 in the Supplement
+      !       of Liu et al. (2012, doi:10.5194/gmd-5-709-2012)
+      !     * It gives a 100% (instead of 63%) regeneration when dtmicro = tau_cld_regenerate
+
+      cld_fm(ishnk,ipass_regen,:ncol,:) = cldo(:ncol,:)
+      cld_to(ishnk,ipass_regen,:ncol,:) = cldo(:ncol,:) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
+
+      ! *************
+      !  Sub-step 2 
+      ! *************
+      !  Let the old clouds regrow back to cldo(i,k).
+
+      cld_fm(igrow,ipass_regen,:ncol,:) = cld_to(ishnk,ipass_regen,:ncol,:) 
+      cld_to(igrow,ipass_regen,:ncol,:) = cldo(:ncol,:)
+
+
+   else ! regeneration is OFF
+      ! We only do the regular grow-shrink calculation. 
+      ! Code wise, the first pass of the "grow_shrink_ipass_loop" below is skipped.
+
+      ipass_start = ipass_evolv
+
+   end if
+
+   ! The second pass of the "grow_shrink_ipass_loop" is the regular calculation
+   ! where we deal with the cloud fraction evolution from cldo(i,k) to cldn(i,k).
+   ! The fact that cldn(i,k) can be smaller or larger than cldo(i,k)
+   ! is dealt with by the grow and shrink if-blocks. 
+
+   ipass_end = ipass_evolv 
+
+   cld_fm(ishnk,ipass_evolv,:ncol,:) = cldo(:ncol,:)
+   cld_to(ishnk,ipass_evolv,:ncol,:) = cldn(:ncol,:)
+
+   cld_fm(igrow,ipass_evolv,:ncol,:) = cldo(:ncol,:)
+   cld_to(igrow,ipass_evolv,:ncol,:) = cldn(:ncol,:)
+
    !=================================================
    ! overall_main_i_loop
    !=================================================
@@ -667,52 +753,24 @@ subroutine dropmixnuc( &
       !=======================================================================
       ! droplet nucleation/aerosol activation
       !=======================================================================
-      ! tau_cld_regenerate = time scale for regeneration of cloudy air 
-      !    by (horizontal) exchange with clear air
-      tau_cld_regenerate = 3600.0_r8 * 3.0_r8 
-
       ! k-loop for growing/shrinking cloud calcs .............................
-      ! grow_shrink_main_k_loop: &
+
+      grow_shrink_main_k_loop: &
       do k = top_lev, pver
 
-! rce 2024.02.12 - added next 15 lines
-grow_shrink_ipass_loop:  &
-         do ipass_grow_shrink = 1, 2
-
-         if (ipass_grow_shrink == 1) then
-            ! when ipass_grow_shrink = 1, dissipate (shrink) then regenerate (grow) a portion of cldo
-            if ( regen_fix ) cycle grow_shrink_ipass_loop
-            cldo_tmp = cldo(i,k)
-
-          ! Formulation in E3SMv1 and v2 (which was not used in default runs, as regen_fix = .true. by default)
-          ! cldn_tmp = cldn(i,k) * exp( -dtmicro/tau_cld_regenerate )
-          !
-          ! Corrected by Hui Wan, 2024-02-13, with confirmation from Dick Easter
-          ! cldn_tmp = cldo(i,k) * exp( -dtmicro/tau_cld_regenerate )
-          !
-          ! alternate formulation (corrected). This is Dick's recommendation.
-          !  - It's more consistent with the description on pages 10-11 in the Supplement
-          !    of Liu et al. (2012, doi:10.5194/gmd-5-709-2012)
-          !  - It gives a 100% (instead of 63%) regeneration when dtmicro = tau_cld_regenerate
-
-            cldn_tmp = cldo(i,k) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
-         else
-            ! when ipass_grow_shrink = 2 (and cldo /= cldn), treat change in cloud fraction from cldo to cldn
-            cldo_tmp = cldo(i,k)
-            cldn_tmp = cldn(i,k)
-         end if
-
-! rce 2024.02.12 - deactivated next 7 lines
-!        if(regen_fix) then 
-!           cldn_tmp = cldn(i,k) !* exp( -dtmicro/tau_cld_regenerate )!HW: there is a bug here; turn off regeneration,01/10/2012
-!        else
-!           cldn_tmp = cldn(i,k) * exp( -dtmicro/tau_cld_regenerate )
-!        endif
-!        !    alternate formulation
-!        !    cldn_tmp = cldn(i,k) * max( 0.0_r8, (1.0_r8-dtmicro/tau_cld_regenerate) )
+       grow_shrink_ipass_loop: &
+       do ipass_grow_shrink = ipass_start, ipass_end 
 
          ! shrinking cloud ......................................................
+
+         ! when ipass_grow_shrink = 1, shrink cldo to an assumed smaller value specified above;
+         ! when ipass_grow_shrink = 2 (and cldn < cldo), shrink from cldo to cldn.
+
+         cldo_tmp = cld_fm(ishnk,ipass_grow_shrink,i,k)
+         cldn_tmp = cld_to(ishnk,ipass_grow_shrink,i,k)
+
          if (cldn_tmp < cldo_tmp) then
+
             !  droplet loss in decaying cloud
             !++ sungsup
             nsource(i,k) = nsource(i,k) + qcld(k)*(cldn_tmp - cldo_tmp)/cldo_tmp*dtinv
@@ -735,31 +793,16 @@ grow_shrink_ipass_loop:  &
                   raercol(k,mm,nsav)    = raercol(k,mm,nsav) - dact
                end do
             end do
+
          end if
 
          ! growing cloud ......................................................
-         !    treat the increase of cloud fraction from when cldn(i,k) > cldo(i,k)
-         !    and also regenerate part of the cloud 
-! rce 2024.02.12 - deactivated next 6 lines
-!        if(regen_fix) then 
-!           cldo_tmp = cldo(i,k)! HW turned off the regeneration growing 
-!        else
-!           cldo_tmp = cldn_tmp
-!        endif
-!        cldn_tmp = cldn(i,k)
 
-! rce 2024.02.12 - added next 6 lines
-         if (ipass_grow_shrink == 1) then
-            ! when ipass_grow_shrink = 1, regenerate the portion of cldo that was dissipated
-            cldo_tmp = cldn_tmp 
-            cldn_tmp = cldo(i,k)
-         end if
-            ! when ipass_grow_shrink = 2 (and cldo < cldn), grow from cldo to cldn
+         ! when ipass_grow_shrink = 1, grow from shrinked cldo to original cldo;
+         ! when ipass_grow_shrink = 2 (and cldo < cldn), grow from cldo to cldn.
 
-! rce 2024.02.12 - reduce the 0.01 change criterion to 0.001
-!        if (cldn_tmp-cldo_tmp > 0.001_r8) then
-! Cloud fraction change threshold in the publicly released E3SMv1 and v2 was 0.01
-!        if (cldn_tmp-cldo_tmp > 0.01_r8) then
+         cldo_tmp = cld_fm(igrow,ipass_grow_shrink,i,k)
+         cldn_tmp = cld_to(igrow,ipass_grow_shrink,i,k)
 
          if (cldn_tmp-cldo_tmp > cldf_growth_threshold) then
 
@@ -810,10 +853,12 @@ grow_shrink_ipass_loop:  &
             enddo
          endif
 
-         enddo grow_shrink_ipass_loop
+       enddo grow_shrink_ipass_loop
 
-      enddo  ! grow_shrink_main_k_loop
+      enddo grow_shrink_main_k_loop
+      !-------------------------------------------------------------------------------------------------
       ! end of k-loop for growing/shrinking cloud calcs ......................
+      !-------------------------------------------------------------------------------------------------
 
       ! ......................................................................
       ! start of k-loop for calc of old cloud activation tendencies ..........
