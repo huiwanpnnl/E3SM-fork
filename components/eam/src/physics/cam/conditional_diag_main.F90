@@ -584,28 +584,25 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
         case ('CAPE')
           call compute_cape( state, pbuf, pcols, pver, arrayout(:,1) ) ! in, in, in, out
 
-        case ('NCIC','CDNC')
-          call cdnc_diag( state, pbuf, pcols, pver, arrayout )
-
-        case ('CDNC_DN')
-          call cdnc_diag   ( state, pbuf, pcols, pver, tmp   )
-          call day_or_night( state, pbuf, pcols, pver, tmp1d )
-          call var3d_day_night( ncol, pcols, pver, tmp1d, tmp, arrayout )
+        case ('CDNC','CDNCqsml','CDNCq1m8','CDNCq2m5')
+          call cdnc_diag( state, pbuf, pcols, pver, trim(adjustl(varname)), arrayout )
 
         case ('CDNCfs09')
-          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, 'AST',  0.9_r8, arrayout )
+          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, trim(adjustl(varname)), 'AST',  0.9_r8, arrayout )
 
         case ('CDNCfl09')
-          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, 'ALST', 0.9_r8, arrayout )
+          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, trim(adjustl(varname)), 'ALST', 0.9_r8, arrayout )
 
-        case ('QCIC','CDMC')
-          call cdmc_diag( state, pbuf, pcols, pver, arrayout )
-
-        case ('RAL')
-          call droplet_mean_radius( state, pbuf, pcols, pver, arrayout )
+        case ('CDMC','CDMCqsml','CDMCq1m8','CDMCq2m5')
+          call cdmc_diag( state, pbuf, pcols, pver, trim(adjustl(varname)), arrayout )
 
         case ('DAYNIGHT')
           call day_or_night( state, pbuf, pcols, pver, arrayout(:,1) )
+
+        case ('CDNC_DN')
+          call cdnc_diag   ( state, pbuf, pcols, pver, trim(adjustl(varname)), tmp   )
+          call day_or_night( state, pbuf, pcols, pver, tmp1d )
+          call var3d_day_night( ncol, pcols, pver, tmp1d, tmp, arrayout )
 
         !-----------------------------------------------------------------------------------
         ! The following were added mostly for testing of the conditional diag functionality
