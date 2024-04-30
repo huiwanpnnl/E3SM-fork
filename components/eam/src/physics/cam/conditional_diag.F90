@@ -36,7 +36,7 @@ module conditional_diag
 
   ! module parameters
 
-  integer, parameter :: ncnd_max         = 10 ! max # of conditions allowed in a single simulation
+  integer, parameter :: ncnd_max         = 20 ! max # of conditions allowed in a single simulation
   integer, parameter :: mname_maxlen     = 8  ! string length for metric name
 
   integer, parameter :: nqoi_max         = 20 ! max # of conditionally sampled QoIs in a single simulation
