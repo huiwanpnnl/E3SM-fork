@@ -37,6 +37,7 @@ use rad_constituents, only: rad_cnst_get_info, rad_cnst_get_aer_mmr, rad_cnst_ge
 use nucleate_ice_cam, only: use_preexisting_ice, nucleate_ice_cam_readnl, nucleate_ice_cam_register, &
                             nucleate_ice_cam_init, nucleate_ice_cam_calc
 
+use ndrop,            only: psat, ccn_name
 use ndrop,            only: ndrop_init, dropmixnuc
 use ndrop_bam,        only: ndrop_bam_init, ndrop_bam_run, ndrop_bam_ccn
 
@@ -142,6 +143,7 @@ subroutine microp_aero_register
    use physics_buffer, only: pbuf_add_field, dtype_r8
 
    integer :: idx
+   integer :: isat
 
    call pbuf_add_field('NPCCN',      'global',dtype_r8,(/pcols,pver/), npccn_idx)
    call pbuf_add_field('NDROPSRC',   'global',dtype_r8,(/pcols,pver/), idx)
@@ -160,6 +162,9 @@ subroutine microp_aero_register
    call pbuf_add_field('NSRCEVAP',   'global',dtype_r8,(/pcols,pver/), idx)
    call pbuf_add_field('NDROPSMX',   'global',dtype_r8,(/pcols,pver/), idx)
 
+   do isat = 1,psat
+      call pbuf_add_field(trim(adjustl(ccn_name(isat))),'global',dtype_r8,(/pcols,pver/), idx)
+   end do
 
    call pbuf_add_field('RNDST',      'physpkg',dtype_r8,(/pcols,pver,4/), rndst_idx)
    call pbuf_add_field('NACON',      'physpkg',dtype_r8,(/pcols,pver,4/), nacon_idx)

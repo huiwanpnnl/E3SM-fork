@@ -51,10 +51,10 @@ real(r8) :: third, twothird, sixth, zero
 real(r8) :: sq2, sqpi
 
 ! CCN diagnostic fields
-integer,  parameter :: psat=6    ! number of supersaturations to calc ccn concentration
+integer,  parameter,public :: psat=6    ! number of supersaturations to calc ccn concentration
 real(r8), parameter :: supersat(psat)= & ! supersaturation (%) to determine ccn concentration
                        (/ 0.02_r8, 0.05_r8, 0.1_r8, 0.2_r8, 0.5_r8, 1.0_r8 /)
-character(len=8) :: ccn_name(psat)= &
+character(len=8),protected,public :: ccn_name(psat)= &
                     (/'CCN1','CCN2','CCN3','CCN4','CCN5','CCN6'/)
 
 ! indices in state and pbuf structures
@@ -1307,6 +1307,9 @@ subroutine dropmixnuc( &
    call ccncalc(state, pbuf, cs, ccn)
    do l = 1, psat
       call outfld(ccn_name(l), ccn(1,1,l), pcols, lchnk)
+
+      ! In addition to writing to history, also save to pbuf for CondiDiag
+      call pbuf_get_field( pbuf, pbuf_get_index(trim(adjustl(ccn_name(l)))), ptr2d ); ptr2d = ccn(:,:,l)
    enddo
 
    if(do_aerocom_ind3) then 
