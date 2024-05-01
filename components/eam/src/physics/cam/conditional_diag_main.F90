@@ -538,7 +538,8 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
         ! aerosol-cloud interactions
 
         case('NPCCN','NDROPSRC','NDROPMIX','NSRCGROW','NSRCSHRK','NSRCNACT','NSRCNCLR','NSRCEVAP','NDROPSMX' &
-            ,'NDROPW','NDROPWSB','CBFGRID','CBDISTP','CBDISTK'  )
+            ,'NDROPW','NDROPWSB','CBFGRID','CBDISTP','CBDISTK' &
+            ,'CCN1','CCN2','CCN3','CCN4','CCN5','CCN6' )
             idx = pbuf_get_index( trim(adjustl(varname)) )  ; call pbuf_get_field( pbuf, idx, ptr2d )
             arrayout(:,:) = ptr2d
 
