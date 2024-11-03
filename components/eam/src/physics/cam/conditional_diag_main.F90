@@ -478,8 +478,14 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
         case('LHF')
            arrayout(1:ncol,1) = cam_in%lhf(1:ncol)
 
+        case('LHF2')
+           arrayout(1:ncol,1) = cam_in%lhf(1:ncol) **2
+
         case('SHF')
            arrayout(1:ncol,1) = cam_in%shf(1:ncol)
+
+        case('SHF2')
+           arrayout(1:ncol,1) = cam_in%shf(1:ncol) **2
 
         case('WSX')
            arrayout(1:ncol,1) = cam_in%wsx(1:ncol)
@@ -538,8 +544,12 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
         ! aerosol-cloud interactions
 
         case('NPCCN','NDROPSRC','NDROPMIX','NSRCGROW','NSRCSHRK','NSRCNACT','NSRCNCLR','NSRCEVAP','NDROPSMX' &
-            ,'NDROPW','NDROPWSB','CBFGRID','CBDISTP','CBDISTK' &
-            ,'CCN1','CCN2','CCN3','CCN4','CCN5','CCN6' )
+            ,'NDROPW','NDROPWSB','CBFGRID','CBDISTP','CBDISTK'     &
+            ,'CCN1'  ,'CCN2'  ,'CCN3'  ,'CCN4',  'CCN5',  'CCN6'   &
+            ,'CCN1CB','CCN2CB','CCN3CB','CCN4CB','CCN5CB','CCN6CB' &
+            ,'CCN1GR','CCN2GR','CCN3GR','CCN4GR','CCN5GR','CCN6GR' &
+            ,'CCN1MX','CCN2MX','CCN3MX','CCN4MX','CCN5MX','CCN6MX' &
+            )
             idx = pbuf_get_index( trim(adjustl(varname)) )  ; call pbuf_get_field( pbuf, idx, ptr2d )
             arrayout(:,:) = ptr2d
 
@@ -589,10 +599,10 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
           call cdnc_diag( state, pbuf, pcols, pver, trim(adjustl(varname)), arrayout )
 
         case ('CDNCfs09')
-          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, trim(adjustl(varname)), 'AST',  0.9_r8, arrayout )
+          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, 'CDNC', 'AST',  0.9_r8, arrayout )
 
         case ('CDNCfl09')
-          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, trim(adjustl(varname)), 'ALST', 0.9_r8, arrayout )
+          call cdnc_masked_by_cldfrc( state, pbuf, pcols, pver, 'CDNC', 'ALST', 0.9_r8, arrayout )
 
         case ('CDMC','CDMCqsml','CDMCq1m8','CDMCq2m5')
           call cdmc_diag( state, pbuf, pcols, pver, trim(adjustl(varname)), arrayout )
