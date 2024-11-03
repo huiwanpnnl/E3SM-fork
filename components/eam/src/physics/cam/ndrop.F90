@@ -469,7 +469,11 @@ subroutine dropmixnuc( &
 
    real(r8), allocatable :: coltend(:,:)       ! column tendency for diagnostic output
    real(r8), allocatable :: coltend_cw(:,:)    ! column tendency
-   real(r8) :: ccn(pcols,pver,psat)    ! number conc of aerosols activated at supersat
+   real(r8) ::   ccn(pcols,pver,psat)    ! number conc of aerosols activated at supersat
+   real(r8) :: ccncb(pcols,pver,psat)    ! number conc of aerosols activated at supersat
+   real(r8) :: ccngr(pcols,pver,psat)    ! number conc of aerosols activated at supersat
+   real(r8) :: ccnmx(pcols,pver,psat)    ! number conc of aerosols activated at supersat
+
    integer :: ccn3d_idx  
    real(r8), pointer :: ccn3d(:, :) 
 
@@ -584,6 +588,10 @@ subroutine dropmixnuc( &
    cbfgrid(:,:) = 0._r8
    cbdistp(:,:) = 0._r8
    cbdistk(:,:) = 0._r8
+
+   ccncb(:,:,:) = 0._r8
+   ccngr(:,:,:) = 0._r8
+   ccnmx(:,:,:) = 0._r8
 
    !-------------------------------------------------------------------------------------------------
    ! Prep work for the "grow_shrink_ipass_loop" below
@@ -1266,31 +1274,11 @@ subroutine dropmixnuc( &
    ! end of main loop over i/longitude ....................................
    !===========================================================================
 
-   ! Find cloudbase pressure for diagnostics/output
-   do i = 1, ncol
-   do k = top_lev, pver
-
-      ! Search from the current lev downward. The first level with cloudbase fraction > 0
-      ! is considered the cloudbase.
-
-      do kb = k,pver
-         if (cbfgrid(i,kb).gt.0_r8) then
-            cbdistp(i,k) = pmid(i,kb) - pmid(i,k)
-            cbdistk(i,k) = kb - k
-            exit
-         end if
-      end do
-
-   end do
-   end do
 
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPSRC'), ptr2d ); ptr2d = nsource
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPMIX'), ptr2d ); ptr2d = ndropmix
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPW'  ), ptr2d ); ptr2d = wtke
    call pbuf_get_field( pbuf, pbuf_get_index('NDROPWSB'), ptr2d ); ptr2d = wsub
-   call pbuf_get_field( pbuf, pbuf_get_index('CBFGRID' ), ptr2d ); ptr2d = cbfgrid
-   call pbuf_get_field( pbuf, pbuf_get_index('CBDISTP' ), ptr2d ); ptr2d = cbdistp
-   call pbuf_get_field( pbuf, pbuf_get_index('CBDISTK' ), ptr2d ); ptr2d = cbdistk
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCGROW'), ptr2d ); ptr2d = srcgrow
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCSHRK'), ptr2d ); ptr2d = srcshrk
    call pbuf_get_field( pbuf, pbuf_get_index('NSRCNACT'), ptr2d ); ptr2d = srcnact
@@ -1304,6 +1292,8 @@ subroutine dropmixnuc( &
    call outfld('WTKE    ', wtke,     pcols, lchnk)
 
    !---------------------------------------
+   ! Calculate CCN-related diagnostics
+   !---------------------------------------
    call ccncalc(state, pbuf, cs, ccn)
    do l = 1, psat
       call outfld(ccn_name(l), ccn(1,1,l), pcols, lchnk)
@@ -1311,6 +1301,44 @@ subroutine dropmixnuc( &
       ! In addition to writing to history, also save to pbuf for CondiDiag
       call pbuf_get_field( pbuf, pbuf_get_index(trim(adjustl(ccn_name(l)))), ptr2d ); ptr2d = ccn(:,:,l)
    enddo
+
+   !-------------------------------------------------------------------------------------
+   ! Find cloudbase level, cloudbase pressure, and cloudbase ccn for diagnostics/output.
+
+   do i = 1, ncol
+   do k = top_lev, pver
+
+      ! Search from the current lev downward. The first level with cloudbase fraction > 0
+      ! is considered the nearest cloudbase.
+
+      do kb = k,pver
+         if (cbfgrid(i,kb).gt.0_r8) then
+            cbdistp(i,k) = pmid(i,kb) - pmid(i,k)   ! distance to cloudbase in Pa
+            cbdistk(i,k) = kb - k                   ! distance to cloudbase in terms of # of layers
+              ccncb(i,k,:) = ccn(i,kb,:)            ! ccn at cloudbase
+            exit
+         end if
+      end do
+
+      if (srcgrow(i,k).gt.1e-3*dtinv) ccngr(i,k,:) = ccn(i,k,:)
+      do l = 1, psat
+         ccnmx(i,k,l) = max( ccngr(i,k,l), ccncb(i,k,l))
+      end do
+
+   end do
+   end do
+
+   ! Save to pbuf
+
+   call pbuf_get_field( pbuf, pbuf_get_index('CBFGRID' ), ptr2d ); ptr2d = cbfgrid
+   call pbuf_get_field( pbuf, pbuf_get_index('CBDISTP' ), ptr2d ); ptr2d = cbdistp
+   call pbuf_get_field( pbuf, pbuf_get_index('CBDISTK' ), ptr2d ); ptr2d = cbdistk
+   do l = 1, psat
+      call pbuf_get_field( pbuf, pbuf_get_index(trim(adjustl(ccn_name(l)))//'CB'), ptr2d ); ptr2d = ccncb(:,:,l)
+      call pbuf_get_field( pbuf, pbuf_get_index(trim(adjustl(ccn_name(l)))//'GR'), ptr2d ); ptr2d = ccngr(:,:,l)
+      call pbuf_get_field( pbuf, pbuf_get_index(trim(adjustl(ccn_name(l)))//'MX'), ptr2d ); ptr2d = ccnmx(:,:,l)
+   enddo
+   !----------
 
    if(do_aerocom_ind3) then 
       ccn3d(:ncol, :) = ccn(:ncol, :, 4)
