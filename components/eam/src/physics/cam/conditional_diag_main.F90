@@ -537,7 +537,7 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
 
         ! cloud frations
 
-        case('CLD','AST','ALST','AIST')
+        case('CLD','AST','ALST','AIST','CONCLD')
             idx = pbuf_get_index( trim(adjustl(varname)) )  ; call pbuf_get_field( pbuf, idx, ptr2d )
             arrayout(:,:) = ptr2d
 

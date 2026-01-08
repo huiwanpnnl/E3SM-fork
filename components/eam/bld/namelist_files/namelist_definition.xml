@@ -1364,20 +1364,20 @@ and the masked values will be sent to history buffer.
 Default: none
 </entry>
 
-<entry id="qoi_name" type="char*8(20)"  category="history"
+<entry id="qoi_name" type="char*8(60)"  category="history"
        group="conditional_diag_nl" valid_values="" >
 List of fields (Quantities of Interest, QoIs) to be
 monitored or conditionally sampled.
 Default: none
 </entry>
 
-<entry id="qoi_nver" type="integer(20)"  category="history"
+<entry id="qoi_nver" type="integer(60)"  category="history"
        group="conditional_diag_nl" valid_values="" >
 Dimension sizes of the QoIs.
 Default: none
 </entry>
 
-<entry id="qoi_x_dp" type="integer(20)"  category="history"
+<entry id="qoi_x_dp" type="integer(60)"  category="history"
        group="conditional_diag_nl" valid_values="" >
 Whether a QoI should be multiplied by dp for output;
 if so, wet or dry.
